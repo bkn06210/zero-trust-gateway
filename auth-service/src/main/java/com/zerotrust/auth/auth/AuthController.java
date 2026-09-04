@@ -1,5 +1,7 @@
 package com.zerotrust.auth.auth;
 
+import com.zerotrust.auth.auth.dto.LoginRequest;
+import com.zerotrust.auth.auth.dto.LoginResponse;
 import com.zerotrust.auth.auth.dto.SignupRequest;
 import com.zerotrust.auth.auth.dto.SignupResponse;
 import jakarta.validation.Valid;
@@ -21,5 +23,10 @@ public class AuthController {
     public SignupResponse signup(@Valid @RequestBody SignupRequest request) {
         Long id = authService.signup(request);
         return new SignupResponse(id);
+    }
+
+    @PostMapping("/login")
+    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+        return authService.login(request);
     }
 }

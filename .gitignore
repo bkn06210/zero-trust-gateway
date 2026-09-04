@@ -1,2 +1,8 @@
 # 진짜 비밀값이 든 파일. 예시는 .env.example 로 올린다
 .env
+
+# 개인 학습용 파일 (레포에 올리지 않음)
+claude.md
+CLAUDE.md
+docs/ROADMAP.md
+docs/NOTES.md

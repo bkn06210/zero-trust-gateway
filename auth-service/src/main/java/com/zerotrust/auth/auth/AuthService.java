@@ -18,6 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Service
@@ -31,6 +32,7 @@ public class AuthService {
     private final JwtProvider jwtProvider;
     private final RefreshTokenCodec refreshTokenCodec;
     private final long refreshExpirationDays;
+    private final Duration reuseGrace;
 
     // 존재하지 않는 이메일로 로그인 시도할 때도 BCrypt를 한 번 돌리기 위한 가짜 해시.
     // 실제 해시와 같은 비용(cost)으로 만들어야 응답 시간이 같아진다.
@@ -41,13 +43,15 @@ public class AuthService {
                        PasswordEncoder passwordEncoder,
                        JwtProvider jwtProvider,
                        RefreshTokenCodec refreshTokenCodec,
-                       @Value("${refresh.expiration-days}") long refreshExpirationDays) {
+                       @Value("${refresh.expiration-days}") long refreshExpirationDays,
+                       @Value("${refresh.reuse-grace-seconds}") long reuseGraceSeconds) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtProvider = jwtProvider;
         this.refreshTokenCodec = refreshTokenCodec;
         this.refreshExpirationDays = refreshExpirationDays;
+        this.reuseGrace = Duration.ofSeconds(reuseGraceSeconds);
         this.dummyHash = passwordEncoder.encode("dummy-password-for-timing");
     }
 
@@ -100,8 +104,14 @@ public class AuthService {
         RefreshToken stored = refreshTokenRepository.findByTokenHash(refreshTokenCodec.hash(rawRefreshToken))
                 .orElseThrow(InvalidRefreshTokenException::new);
 
-        // 2. 이미 폐기된 토큰이 다시 왔다 = 누군가 복사본을 갖고 있다. 이 사용자의 토큰을 전부 끊는다.
+        // 2. 이미 폐기된 토큰이 다시 왔다.
         if (stored.isRevoked()) {
+            // 2-1. 폐기 직후라면 탭 겹침이나 재시도일 가능성이 높다. 거절만 하고 다른 토큰은 건드리지 않는다.
+            //      새 토큰은 주지 않으므로, 이 틈에 끼어든 공격자가 얻는 것은 없다.
+            if (stored.wasRevokedWithin(reuseGrace)) {
+                throw new InvalidRefreshTokenException();
+            }
+            // 2-2. 한참 지난 뒤라면 정상 앱은 이미 새 토큰을 쓰고 있어야 한다. 누군가 복사본을 갖고 있다 → 전부 끊는다.
             revokeAllOnReuse(stored);
             throw new InvalidRefreshTokenException();
         }
@@ -111,9 +121,9 @@ public class AuthService {
             throw new InvalidRefreshTokenException();
         }
 
-        // 4. 폐기. 2번 확인과 이 줄 사이에 같은 토큰의 다른 요청이 먼저 폐기했다면 0이 나온다 → 역시 재사용.
-        if (refreshTokenRepository.revokeIfActive(stored.getId()) == 0) {
-            revokeAllOnReuse(stored);
+        // 4. 폐기. 2번 확인과 이 줄 사이에 같은 토큰의 다른 요청이 먼저 폐기했다면 0이 나온다.
+        //    방금 폐기된 것이므로 유예 시간 안쪽이다. 거절만 한다. (여기서 전부 폐기하면 먼저 성공한 요청의 새 토큰까지 죽는다)
+        if (refreshTokenRepository.revokeIfActive(stored.getId(), LocalDateTime.now()) == 0) {
             throw new InvalidRefreshTokenException();
         }
 
@@ -125,11 +135,11 @@ public class AuthService {
     @Transactional
     public void logout(String rawRefreshToken) {
         refreshTokenRepository.findByTokenHash(refreshTokenCodec.hash(rawRefreshToken))
-                .ifPresent(token -> refreshTokenRepository.revokeIfActive(token.getId()));
+                .ifPresent(token -> refreshTokenRepository.revokeIfActive(token.getId(), LocalDateTime.now()));
     }
 
     private void revokeAllOnReuse(RefreshToken reused) {
-        int revoked = refreshTokenRepository.revokeAllByUser(reused.getUser());
+        int revoked = refreshTokenRepository.revokeAllByUser(reused.getUser(), LocalDateTime.now());
         // 보안 이벤트는 반드시 로그로 남긴다. 토큰 값은 찍지 않고 식별자만.
         log.warn("refresh token 재사용 감지: userId={}, tokenId={}, 폐기된 토큰 수={}",
                 reused.getUser().getId(), reused.getId(), revoked);

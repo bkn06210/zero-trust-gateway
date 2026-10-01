@@ -33,6 +33,8 @@ public abstract class IntegrationTestSupport {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         // .env가 없는 환경(CI 등)에서도 돌도록 테스트 전용 키를 넣는다. 실제 키가 아니다.
         registry.add("jwt.secret", () -> "test-only-secret-key-for-integration-tests-0123456789");
+        // 유예 시간이 지난 경우를 테스트하려면 기다려야 하므로, 테스트에서는 1초로 줄인다.
+        registry.add("refresh.reuse-grace-seconds", () -> "1");
     }
 
     @Value("${local.server.port}")

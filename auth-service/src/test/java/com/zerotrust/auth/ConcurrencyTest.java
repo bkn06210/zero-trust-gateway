@@ -78,7 +78,7 @@ class ConcurrencyTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("같은 refresh 토큰으로 20건이 동시에 갱신하면 정확히 한 건만 성공한다")
+    @DisplayName("같은 refresh 토큰으로 20건이 동시에 갱신하면 한 건만 성공하고, 그 새 토큰은 살아 있다")
     void concurrentRefreshWithSameToken() throws Exception {
         String email = "race-" + UUID.randomUUID() + "@example.com";
         post("/auth/signup", credentials(email));
@@ -90,7 +90,7 @@ class ConcurrencyTest extends IntegrationTestSupport {
         Map<Integer, Long> counts = countByStatus(responses);
         System.out.println("[실험] 동시 갱신 20건 상태 코드 분포: " + counts);
 
-        // 살아남은 토큰이 몇 개인지: 0이면 승자가 받은 새 토큰까지 폐기된 것.
+        // 성공한 한 건이 받은 새 토큰은 살아 있어야 한다. 동시에 온 나머지 요청이 그것까지 폐기하면 안 된다.
         Integer alive = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM refresh_tokens t JOIN users u ON t.user_id = u.id WHERE u.email = ? AND t.revoked = false",
                 Integer.class, email);
@@ -98,5 +98,10 @@ class ConcurrencyTest extends IntegrationTestSupport {
 
         assertThat(counts).containsOnlyKeys(200, 401);
         assertThat(counts.get(200)).isEqualTo(1);
+        assertThat(alive).isEqualTo(1);
+
+        // 그 새 토큰으로 실제로 다시 갱신이 된다.
+        String newToken = responses.stream().filter(r -> r.status() == 200).findFirst().orElseThrow().get("refreshToken");
+        assertThat(post("/auth/refresh", "{\"refreshToken\":\"" + newToken + "\"}").status()).isEqualTo(200);
     }
 }

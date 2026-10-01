@@ -2,6 +2,7 @@ package com.zerotrust.auth.common;
 
 import com.zerotrust.auth.auth.DuplicateEmailException;
 import com.zerotrust.auth.auth.InvalidCredentialsException;
+import com.zerotrust.auth.auth.InvalidRefreshTokenException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -26,6 +27,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ErrorResponse handleInvalidCredentials(InvalidCredentialsException e) {
         return new ErrorResponse("INVALID_CREDENTIALS", e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ErrorResponse handleInvalidRefreshToken(InvalidRefreshTokenException e) {
+        return new ErrorResponse("INVALID_REFRESH_TOKEN", e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

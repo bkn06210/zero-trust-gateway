@@ -1,9 +1,10 @@
 package com.zerotrust.auth.auth;
 
 import com.zerotrust.auth.auth.dto.LoginRequest;
-import com.zerotrust.auth.auth.dto.LoginResponse;
+import com.zerotrust.auth.auth.dto.RefreshRequest;
 import com.zerotrust.auth.auth.dto.SignupRequest;
 import com.zerotrust.auth.auth.dto.SignupResponse;
+import com.zerotrust.auth.auth.dto.TokenResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -26,7 +27,18 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+    public TokenResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/refresh")
+    public TokenResponse refresh(@Valid @RequestBody RefreshRequest request) {
+        return authService.refresh(request.refreshToken());
+    }
+
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(@Valid @RequestBody RefreshRequest request) {
+        authService.logout(request.refreshToken());
     }
 }

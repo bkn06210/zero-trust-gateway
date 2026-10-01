@@ -1,11 +1,10 @@
 package com.zerotrust.auth;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class AuthServiceApplicationTests {
+class AuthServiceApplicationTests extends IntegrationTestSupport {
 
+	// 앱이 설정 오류 없이 뜨는지만 확인한다.
 	@Test
 	void contextLoads() {
 	}

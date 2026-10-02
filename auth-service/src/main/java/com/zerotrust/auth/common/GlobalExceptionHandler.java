@@ -1,5 +1,6 @@
 package com.zerotrust.auth.common;
 
+import com.zerotrust.auth.admin.ForbiddenException;
 import com.zerotrust.auth.auth.DuplicateEmailException;
 import com.zerotrust.auth.auth.InvalidCredentialsException;
 import com.zerotrust.auth.auth.InvalidRefreshTokenException;
@@ -44,6 +45,12 @@ public class GlobalExceptionHandler {
                 .findFirst()
                 .orElse("잘못된 요청입니다.");
         return new ErrorResponse("INVALID_REQUEST", message);
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ErrorResponse handleForbidden(ForbiddenException e) {
+        return new ErrorResponse("FORBIDDEN", e.getMessage());
     }
 
     // 신원 헤더(X-User-Id) 없이 보호된 API를 부른 경우.

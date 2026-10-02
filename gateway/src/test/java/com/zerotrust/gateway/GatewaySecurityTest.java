@@ -161,6 +161,52 @@ class GatewaySecurityTest {
         assertThat(BACKEND_CALLS.get()).isZero();
     }
 
+    // ---- 권한 (P2) ----
+
+    @Test
+    @DisplayName("USER 토큰으로 관리자 경로에 가면 403이고, 뒤쪽 서비스는 호출되지 않는다")
+    void userCannotReachAdminPath() throws Exception {
+        int status = call("GET", "/admin/users", "Authorization", "Bearer " + validToken());
+
+        assertThat(status).isEqualTo(403);
+        assertThat(BACKEND_CALLS.get()).isZero();
+    }
+
+    @Test
+    @DisplayName("ADMIN 토큰이면 관리자 경로가 열리고, 역할이 뒤쪽으로 전달된다")
+    void adminCanReachAdminPath() throws Exception {
+        String adminToken = token("7", "ADMIN", Instant.now().plusSeconds(600), KEY);
+
+        assertThat(call("GET", "/admin/users", "Authorization", "Bearer " + adminToken)).isEqualTo(200);
+        assertThat(LAST_HEADERS.get().getFirst("X-User-Role")).isEqualTo("ADMIN");
+    }
+
+    @Test
+    @DisplayName("토큰 없이 관리자 경로에 가면 403이 아니라 401이다")
+    void adminPathWithoutTokenIsUnauthorized() throws Exception {
+        assertThat(call("GET", "/admin/users")).isEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("대소문자를 바꾼 관리자 경로로도 USER는 통과하지 못한다")
+    void adminPathCaseVariation() throws Exception {
+        int status = call("GET", "/ADMIN/users", "Authorization", "Bearer " + validToken());
+
+        assertThat(status).isEqualTo(403);
+        assertThat(BACKEND_CALLS.get()).isZero();
+    }
+
+    @Test
+    @DisplayName("USER 토큰에 X-User-Role: ADMIN 헤더를 직접 써도 403이다")
+    void roleHeaderCannotGrantAdmin() throws Exception {
+        int status = call("GET", "/admin/users",
+                "Authorization", "Bearer " + validToken(),
+                "X-User-Role", "ADMIN");
+
+        assertThat(status).isEqualTo(403);
+        assertThat(BACKEND_CALLS.get()).isZero();
+    }
+
     // ---- 통과되어야 하는 것들 ----
 
     @Test

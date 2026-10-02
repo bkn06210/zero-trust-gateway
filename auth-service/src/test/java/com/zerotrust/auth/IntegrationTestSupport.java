@@ -35,7 +35,12 @@ public abstract class IntegrationTestSupport {
         registry.add("jwt.secret", () -> "test-only-secret-key-for-integration-tests-0123456789");
         // 유예 시간이 지난 경우를 테스트하려면 기다려야 하므로, 테스트에서는 1초로 줄인다.
         registry.add("refresh.reuse-grace-seconds", () -> "1");
+        registry.add("admin.email", () -> ADMIN_EMAIL);
+        registry.add("admin.password", () -> ADMIN_PASSWORD);
     }
+
+    protected static final String ADMIN_EMAIL = "admin@test.example.com";
+    protected static final String ADMIN_PASSWORD = "admin-test-password";
 
     @Value("${local.server.port}")
     private int port;
@@ -58,5 +63,14 @@ public abstract class IntegrationTestSupport {
                 ? Map.of()
                 : JsonParserFactory.getJsonParser().parseMap(response.body());
         return new Response(response.statusCode(), body);
+    }
+
+    // 응답 본문이 목록일 수도 있어 상태 코드만 돌려준다. headers는 이름, 값, 이름, 값 순서.
+    protected int getStatus(String path, String... headers) throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET();
+        for (int i = 0; i < headers.length; i += 2) {
+            builder.header(headers[i], headers[i + 1]);
+        }
+        return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString()).statusCode();
     }
 }

@@ -41,7 +41,8 @@ public class ProxyController {
     public ProxyController(@Value("${services.auth.url}") String authServiceUrl) {
         this.routes = Map.of(
                 "/auth/", authServiceUrl,
-                "/users/", authServiceUrl
+                "/users/", authServiceUrl,
+                "/admin/", authServiceUrl
         );
 
         // 뒤쪽 서비스가 느리거나 죽었을 때 Gateway까지 같이 멈추지 않도록 시간 제한을 건다.

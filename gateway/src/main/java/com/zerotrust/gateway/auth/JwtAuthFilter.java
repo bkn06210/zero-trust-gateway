@@ -20,7 +20,7 @@ import java.util.Set;
 // 모든 요청이 Controller에 닿기 전에 반드시 거치는 검문소.
 // 인증(누구인가, 실패 시 401)을 먼저 하고, 인가(해도 되는가, 실패 시 403)를 그 다음에 한다.
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(Ordered.HIGHEST_PRECEDENCE + 1)   // 로그인 횟수 제한 필터 다음
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);

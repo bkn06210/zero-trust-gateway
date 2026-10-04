@@ -2,6 +2,8 @@ package com.zerotrust.gateway.proxy;
 
 import com.zerotrust.gateway.auth.AuthenticatedUser;
 import com.zerotrust.gateway.auth.JwtAuthFilter;
+import com.zerotrust.gateway.ratelimit.LoginRateLimitFilter;
+import com.zerotrust.gateway.ratelimit.RateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,8 +39,10 @@ public class ProxyController {
     // 경로 앞부분 → 어느 서비스로 보낼지.
     private final Map<String, String> routes;
     private final RestClient restClient;
+    private final RateLimiter rateLimiter;
 
-    public ProxyController(@Value("${services.auth.url}") String authServiceUrl) {
+    public ProxyController(@Value("${services.auth.url}") String authServiceUrl, RateLimiter rateLimiter) {
+        this.rateLimiter = rateLimiter;
         this.routes = Map.of(
                 "/auth/", authServiceUrl,
                 "/users/", authServiceUrl,
@@ -100,7 +104,7 @@ public class ProxyController {
             }
 
             // 4. 뒤쪽의 응답(상태 코드, 본문)을 손대지 않고 그대로 돌려준다. 4xx, 5xx도 그대로.
-            return outgoing.exchange((req, res) -> {
+            ResponseEntity<byte[]> result = outgoing.exchange((req, res) -> {
                 ResponseEntity.BodyBuilder builder = ResponseEntity.status(res.getStatusCode());
                 MediaType contentType = res.getHeaders().getContentType();
                 if (contentType != null) {
@@ -108,6 +112,14 @@ public class ProxyController {
                 }
                 return builder.body(res.getBody().readAllBytes());
             });
+
+            // 4-1. 로그인에 성공했으면 실패 횟수를 지운다. 비밀번호를 몇 번 잘못 친 정상 사용자가 성공 뒤에도 제한에 걸리지 않게.
+            @SuppressWarnings("unchecked")
+            List<String> rateLimitKeys = (List<String>) request.getAttribute(LoginRateLimitFilter.KEYS_ATTRIBUTE);
+            if (rateLimitKeys != null && result.getStatusCode().is2xxSuccessful()) {
+                rateLimiter.reset(rateLimitKeys);
+            }
+            return result;
         } catch (ResourceAccessException e) {
             // 5. 뒤쪽 서비스에 연결 자체가 안 됨(죽었거나 시간 초과). 내부 주소는 응답에 싣지 않는다.
             log.error("뒤쪽 서비스 연결 실패: {} {}", request.getMethod(), uri, e);

@@ -1,111 +1,17 @@
 package com.zerotrust.gateway;
 
 import com.sun.net.httpserver.Headers;
-import com.sun.net.httpserver.HttpServer;
-import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
 import javax.crypto.SecretKey;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.Date;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// Gateway를 실제로 띄우고, 뒤쪽 서비스 자리에는 "받은 요청을 기록만 하는 가짜 서버"를 둔다.
-// 가짜 서버 덕분에 Gateway가 뒤로 무엇을 넘겼는지, 애초에 넘기긴 했는지를 확인할 수 있다.
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class GatewaySecurityTest {
-
-    private static final String SECRET = "test-only-secret-key-for-gateway-tests-0123456789";
-    private static final SecretKey KEY = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
-
-    private static final HttpServer BACKEND;
-    private static final AtomicInteger BACKEND_CALLS = new AtomicInteger();
-    private static final AtomicReference<Headers> LAST_HEADERS = new AtomicReference<>();
-
-    static {
-        try {
-            BACKEND = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
-        }
-        BACKEND.createContext("/", exchange -> {
-            BACKEND_CALLS.incrementAndGet();
-            LAST_HEADERS.set(exchange.getRequestHeaders());
-            byte[] body = "{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, body.length);
-            exchange.getResponseBody().write(body);
-            exchange.close();
-        });
-        BACKEND.start();
-    }
-
-    @DynamicPropertySource
-    static void overrideProperties(DynamicPropertyRegistry registry) {
-        registry.add("jwt.secret", () -> SECRET);
-        registry.add("services.auth.url", () -> "http://localhost:" + BACKEND.getAddress().getPort());
-    }
-
-    @Value("${local.server.port}")
-    private int port;
-
-    private final HttpClient httpClient = HttpClient.newHttpClient();
-
-    @BeforeEach
-    void resetBackend() {
-        BACKEND_CALLS.set(0);
-        LAST_HEADERS.set(null);
-    }
-
-    // ---- 도우미 ----
-
-    private String token(String userId, String role, Instant expiresAt, SecretKey key) {
-        return Jwts.builder()
-                .subject(userId)
-                .claim("role", role)
-                .expiration(Date.from(expiresAt))
-                .signWith(key)
-                .compact();
-    }
-
-    private String validToken() {
-        return token("1", "USER", Instant.now().plusSeconds(600), KEY);
-    }
-
-    private String base64Url(String text) {
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(text.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private int call(String method, String path, String... headers) throws Exception {
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
-                .method(method, HttpRequest.BodyPublishers.noBody());
-        for (int i = 0; i < headers.length; i += 2) {
-            builder.header(headers[i], headers[i + 1]);
-        }
-        return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString()).statusCode();
-    }
-
-    private int getWithToken(String token) throws Exception {
-        return call("GET", "/users/me", "Authorization", "Bearer " + token);
-    }
+class GatewaySecurityTest extends GatewayTestSupport {
 
     // ---- 차단되어야 하는 것들 ----
 
@@ -237,7 +143,7 @@ class GatewaySecurityTest {
     @Test
     @DisplayName("공개 경로는 토큰 없이 전달되고, 신원 헤더는 붙지 않는다")
     void publicEndpointNeedsNoToken() throws Exception {
-        assertThat(call("POST", "/auth/login", "X-User-Id", "999")).isEqualTo(200);
+        assertThat(call("POST", "/auth/signup", "X-User-Id", "999")).isEqualTo(200);
 
         assertThat(BACKEND_CALLS.get()).isEqualTo(1);
         assertThat(LAST_HEADERS.get().containsKey("X-User-Id")).isFalse();

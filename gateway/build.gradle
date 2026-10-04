@@ -20,12 +20,14 @@ repositories {
 dependencies {
 	// Spring Cloud Gateway를 쓰지 않는다. 일반 web 위에 Filter와 전달 로직을 직접 구현한다.
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.testcontainers:testcontainers'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

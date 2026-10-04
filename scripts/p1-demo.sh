@@ -22,9 +22,15 @@ req $GW/users/me
 show "3. 토큰으로 내 정보 조회 → 200"
 req $GW/users/me -H "Authorization: Bearer $TOKEN"
 
-show "4. 위조 토큰 (서명 마지막 글자를 바꿈) → 401"
-LAST=${TOKEN: -1}; [ "$LAST" = "A" ] && NEW=B || NEW=A
-req $GW/users/me -H "Authorization: Bearer ${TOKEN%?}$NEW"
+show "4. 위조 토큰 (서명 가운데 글자 하나를 바꿈) → 401"
+# 마지막 글자를 바꾸면 안 된다: base64의 마지막 글자 하단 비트는 채움(padding)이라 A↔B처럼 바꿔도 같은 바이트가 된다.
+SIG=${TOKEN##*.}; MID=${SIG:20:1}; [ "$MID" = "x" ] && NEW=y || NEW=x
+req $GW/users/me -H "Authorization: Bearer ${TOKEN%.*}.${SIG:0:20}${NEW}${SIG:21}"
+
+show "4-1. 서명 마지막 글자를 '같은 상위 비트' 글자로 바꾸면 → 200 (위조가 아니다: 디코딩하면 같은 바이트)"
+# 86자 base64url의 마지막 글자는 상위 2비트만 데이터이고 하위 4비트는 채움이다. 하위 비트만 다른 글자로 바꾸면 바이트가 같다.
+ALT=$(python -c "a='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'; print(a[a.index('${SIG: -1}') ^ 1])")
+req $GW/users/me -H "Authorization: Bearer ${TOKEN%?}$ALT"
 
 show "5. kim 토큰 + 직접 쓴 X-User-Id: 2 헤더 → 여전히 kim (게이트웨이가 헤더를 버림)"
 req $GW/users/me -H "Authorization: Bearer $TOKEN" -H "X-User-Id: 2"
@@ -32,5 +38,5 @@ req $GW/users/me -H "Authorization: Bearer $TOKEN" -H "X-User-Id: 2"
 show "6. 등록되지 않은 경로 → 404"
 req $GW/nothing/here -H "Authorization: Bearer $TOKEN"
 
-show "7. [취약점] 게이트웨이를 건너뛰고 8081에 직접, 토큰 없이 X-User-Id: 2 → lee 정보가 나옴"
+show "7. 게이트웨이를 건너뛰고 8081에 직접 → compose에서는 포트가 닫혀 연결 자체가 안 됨 (HTTP 000)"
 req $AUTH/users/me -H "X-User-Id: 2"

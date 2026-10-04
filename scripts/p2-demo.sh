@@ -32,5 +32,5 @@ req $GW/admin/users -H "Authorization: Bearer $ADMIN_TOKEN"
 show "5. USER 토큰으로 일반 API → 200 (권한 검사가 일반 경로를 막지 않음)"
 req $GW/users/me -H "Authorization: Bearer $USER_TOKEN"
 
-show "6. [취약점] 게이트웨이를 건너뛰고 8081에 직접 X-User-Role: ADMIN → 200"
+show "6. 게이트웨이를 건너뛰고 8081에 직접 → compose에서는 포트가 닫혀 연결 자체가 안 됨 (HTTP 000)"
 req $AUTH/admin/users -H "X-User-Role: ADMIN"

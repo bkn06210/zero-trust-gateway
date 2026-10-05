@@ -1,6 +1,6 @@
 plugins {
 	id 'java'
-	id 'org.springframework.boot' version '4.0.7'
+	id 'org.springframework.boot' version '4.0.8'
 	id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -16,6 +16,12 @@ java {
 repositories {
 	mavenCentral()
 }
+
+// Trivy가 잡은 취약점 대응. Boot 4.0.8이 정한 버전보다 새 패치로 올린다.
+// Boot가 이 버전들을 따라잡으면 지운다.
+ext['tomcat.version'] = '11.0.25'        // CVE-2026-65182, 65905, 68525 (인증 우회)
+ext['jackson-bom.version'] = '3.1.7'     // CVE-2026-89407, 89425, 68497, 91776, 91777 (DoS)
+ext['jackson-2-bom.version'] = '2.21.7'
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'

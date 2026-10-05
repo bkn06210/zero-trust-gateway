@@ -1,0 +1,81 @@
+# push마다 자동으로 돈다. 하나라도 실패하면 그 커밋에 빨간 X가 붙는다.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # 1. 빌드 + 테스트. 서비스마다 따로 돌려서 어느 쪽이 깨졌는지 바로 보이게 한다.
+  test:
+    name: test (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [auth-service, gateway]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      # Testcontainers는 Docker가 필요하다. GitHub의 ubuntu 러너에는 이미 Docker가 켜져 있다.
+      - name: Run tests
+        working-directory: ${{ matrix.service }}
+        run: ./gradlew test --no-daemon
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ matrix.service }}
+          path: ${{ matrix.service }}/build/reports/tests/test
+
+  # 2. 정적 분석(SAST). 코드를 실행하지 않고 패턴으로 취약점을 찾는다.
+  semgrep:
+    name: semgrep (SAST)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan
+        run: semgrep scan --config p/java --config p/secrets --config p/owasp-top-ten --error --exclude-rule java.lang.security.audit.spring-csrf-disabled
+
+  # 3. 비밀값 탐지. 커밋 이력 전체에서 키·비밀번호 모양을 찾는다.
+  gitleaks:
+    name: gitleaks (secrets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 4. 이미지 취약점 스캔. 이미지 안의 OS 패키지와 자바 라이브러리에 알려진 취약점(CVE)이 있는지.
+  trivy:
+    name: trivy (${{ matrix.service }} image)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [auth-service, gateway]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t ${{ matrix.service }}:ci ./${{ matrix.service }}
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ matrix.service }}:ci
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"

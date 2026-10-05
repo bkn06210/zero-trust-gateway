@@ -9,9 +9,13 @@ ORIG=$(git rev-parse --abbrev-ref HEAD)
 DEMO_DIR=auth-service/src/main/java/com/zerotrust/auth/demo
 git checkout -q -b demo/insecure
 
+# 가짜 키를 이 파일에 그대로 적으면 이 스크립트 자체가 CI의 gitleaks와 Semgrep에 걸린다 (실제로 걸렸다).
+# 실행 시점에 조각을 이어 붙여 만든다. 형식만 AWS 키이고 실제 값이 아니다.
+FAKE_KEY="AKIA$(echo Z7Q3XK9PLM2NB4RT)"
+
 echo "## 1. 일부러 넣는 것"
 mkdir -p "$DEMO_DIR"
-cat > "$DEMO_DIR/InsecureDemo.java" <<'EOF'
+cat > "$DEMO_DIR/InsecureDemo.java" <<EOF
 package com.zerotrust.auth.demo;
 
 import java.sql.Connection;
@@ -20,7 +24,7 @@ import java.sql.Statement;
 
 public class InsecureDemo {
     // (1) 코드에 박힌 AWS 키 — 형식만 맞는 무작위 값. AWS 문서의 예시 키(AKIAIOSFODNN7EXAMPLE)는 gitleaks가 알고 무시한다.
-    static final String AWS_SECRET = "AKIAZ7Q3XK9PLM2NB4RT";
+    static final String AWS_SECRET = "$FAKE_KEY";
 
     // (2) 사용자 입력을 그대로 이어붙인 SQL — SQL 인젝션
     public void find(Connection conn, String email) throws SQLException {

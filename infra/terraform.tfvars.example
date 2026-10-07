@@ -1,0 +1,7 @@
+# 복사해서 terraform.tfvars 로 만들고 값을 채운다. terraform.tfvars 는 git에 올라가지 않는다.
+admin_cidr          = "1.2.3.4/32"                 # SSH를 허용할 내 IP. curl https://checkip.amazonaws.com
+ssh_public_key_path = "C:/Users/me/.ssh/zero-trust.pub"
+jwt_secret          = "change-me"                  # openssl rand -base64 48
+db_password         = "change-me"
+admin_email         = "admin@example.com"
+admin_password      = "change-me"

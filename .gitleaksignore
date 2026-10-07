@@ -2,3 +2,4 @@
 # 아래는 시연 스크립트의 초안에 들어 있던 "형식만 AWS 키인 무작위 문자열"이다. 실제 키가 아니다.
 # 실제 비밀값이었다면 여기에 적는 게 아니라 그 비밀값을 폐기·교체해야 한다. 이력에 남은 것은 지워도 소용없다.
 d99e2dbb63cd48e58aed3df02745687072a281fa:scripts/p4-2-demo.sh:generic-api-key:23
+d99e2dbb63cd48e58aed3df02745687072a281fa:scripts/p4-2-demo.sh:aws-access-token:23

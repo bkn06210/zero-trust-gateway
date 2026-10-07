@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: write   # 이미지를 GitHub 이미지 저장소(GHCR)에 올리기 위해
 
 # 액션은 태그가 아니라 커밋 SHA로 고정한다. 태그는 소유자가 조용히 다른 커밋으로 옮길 수 있어,
 # 액션 저장소가 탈취되면 우리 CI가 악성 코드를 실행하게 된다 (2025년 trivy-action 탈취 사건).
@@ -82,3 +83,29 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
+
+  # 5. 위 검사를 전부 통과했을 때만 이미지를 올린다. 하나라도 실패하면 이 단계는 실행되지 않는다 = 게이트.
+  publish:
+    name: publish (${{ matrix.service }} image)
+    needs: [test, semgrep, gitleaks, trivy]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [auth-service, gateway]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          # latest 와 커밋 SHA 두 개의 이름표를 붙인다. 문제 생기면 SHA로 특정 버전을 되돌릴 수 있다.
+          tags: |
+            ghcr.io/${{ github.repository }}/${{ matrix.service }}:latest
+            ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
+

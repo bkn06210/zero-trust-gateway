@@ -28,7 +28,7 @@ Terraform으로 AWS에 올렸고, push하면 테스트와 보안 스캔을 거�
 
 ## 기술
 
-Java 21 · Spring Boot 4 · Spring Data JPA · PostgreSQL 16 · Redis 7 · JWT · BCrypt · Docker Compose · JUnit 5 · Testcontainers · GitHub Actions · Semgrep · gitleaks · Trivy · Terraform · AWS EC2 · SSM
+Java 21 · Spring Boot 4 · Spring Data JPA · PostgreSQL 16 · Redis 7 · JWT · BCrypt · Docker Compose · JUnit 5 · Testcontainers · GitHub Actions · Semgrep · gitleaks · Trivy · Terraform · AWS EC2 · SSM · Prometheus · Grafana
 
 ## 구현한 것
 
@@ -72,6 +72,13 @@ push마다 아래가 순서대로 돌고, 앞 단계가 하나라도 실패하�
 - 비밀값은 SSM Parameter Store에 암호화해 두고, 서버가 부팅할 때 IAM 역할로 읽어 `.env`를 만듭니다. 서버에 키를 두지 않습니다.
 - 배포는 SSH 대신 SSM 원격 명령으로 하므로 GitHub에 22번을 열지 않습니다.
 - 안 쓸 때는 `terraform destroy`로 전부 내리고 필요할 때 다시 올립니다.
+
+### 관측성
+Prometheus가 두 서비스의 지표와 서버 자원을 15초마다 수집하고, Grafana 대시보드가 실시간으로 보여줍니다.
+
+- Gateway가 막은 요청을 사유별로 셉니다. 토큰 없음, 토큰 위조, 권한 없음, 로그인 제한.
+- 지표는 별도 포트로만 내고 바깥에 열지 않습니다. 대시보드 포트는 관리자 IP에만 엽니다.
+- 대시보드와 데이터 출처 설정은 파일로 저장소에 있어 서버를 다시 만들어도 그대로 올라옵니다.
 
 ## 실제로 겪고 해결한 문제
 
@@ -118,4 +125,5 @@ AWS에 올리려면 `infra/terraform.tfvars.example`을 복사해 값을 채우�
 - **access token은 만료 전 즉시 무효화가 안 됩니다.** 짧은 만료로 완화했고, `jti`로 블랙리스트를 붙일 수 있습니다.
 - **IP를 `getRemoteAddr()`로 읽습니다.** 로드밸런서 뒤에서는 전부 같은 IP로 보입니다. 신뢰하는 프록시의 `X-Forwarded-For` 처리가 필요합니다.
 - **GitHub 배포 권한이 장기 키입니다.** OIDC가 표준이지만 계정 정책이 막아 최소 권한의 전용 사용자로 대체했습니다.
-- **다음**: 구조화 로깅과 메트릭, 공격 트래픽 대시보드.
+- **Grafana가 평문 HTTP입니다.** 관리자 IP에만 열려 있지만 로그인 비밀번호가 평문으로 지나갑니다. 도메인을 붙여 HTTPS로 올리면 해결됩니다.
+- **다음**: 구조화 로깅, 공격 IP 분포, HTTPS.

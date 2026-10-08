@@ -33,6 +33,8 @@ for key in JWT_SECRET DB_NAME DB_USER DB_PASSWORD ADMIN_EMAIL ADMIN_PASSWORD GRA
   echo "$key=$value" >> .env
 done
 chown -R ec2-user:ec2-user /opt/zero-trust
+# 배포 명령(SSM)은 root로 실행된다. 주인이 다른 저장소를 git이 거부하지 않게 신뢰 목록에 넣는다.
+git config --system --add safe.directory /opt/zero-trust
 
 # 6. 기동
 docker compose -f docker-compose.prod.yml pull --quiet

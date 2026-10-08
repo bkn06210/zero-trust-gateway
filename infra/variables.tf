@@ -20,10 +20,15 @@ variable "ssh_public_key_path" {
   type        = string
 }
 
-variable "compose_url" {
-  description = "서버가 받아갈 compose 파일 주소"
+variable "repo_url" {
+  description = "서버가 받아갈 저장소 주소"
   type        = string
-  default     = "https://raw.githubusercontent.com/bkn06210/zero-trust-gateway/main/docker-compose.prod.yml"
+  default     = "https://github.com/bkn06210/zero-trust-gateway.git"
+}
+
+variable "grafana_admin_password" {
+  type      = string
+  sensitive = true
 }
 
 variable "jwt_secret" {

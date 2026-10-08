@@ -148,4 +148,17 @@ class GatewaySecurityTest extends GatewayTestSupport {
         assertThat(BACKEND_CALLS.get()).isEqualTo(1);
         assertThat(LAST_HEADERS.get().containsKey("X-User-Id")).isFalse();
     }
+
+    // ---- 지표 ----
+
+    @Test
+    @DisplayName("막은 요청은 종류별로 세어져 지표로 노출되고, 지표 포트는 토큰 없이 읽힌다")
+    void blockedRequestsAreCounted() throws Exception {
+        call("GET", "/users/me");
+        call("GET", "/admin/users", "Authorization", "Bearer " + validToken());
+
+        String metrics = metrics();
+        assertThat(metrics).contains("gateway_blocked_requests_total{outcome=\"unauthorized\",reason=\"missing_token\"}");
+        assertThat(metrics).contains("gateway_blocked_requests_total{outcome=\"forbidden\",reason=\"role\"}");
+    }
 }

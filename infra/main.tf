@@ -46,6 +46,15 @@ resource "aws_security_group" "gateway" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # 대시보드도 관리자 IP에서만. 로그인이 있지만 운영 화면을 전 세계에 보일 이유가 없다.
+  ingress {
+    description = "grafana from admin"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = [var.admin_cidr]
+  }
+
   ingress {
     description = "ssh from admin"
     from_port   = 22
@@ -75,12 +84,13 @@ resource "aws_key_pair" "admin" {
 # 서버는 부팅할 때 여기서 읽어 .env를 만든다. 비밀값이 Terraform 코드나 서버 생성 스크립트에 그대로 박히지 않는다.
 locals {
   secrets = {
-    JWT_SECRET     = var.jwt_secret
-    DB_NAME        = "authdb"
-    DB_USER        = "authuser"
-    DB_PASSWORD    = var.db_password
-    ADMIN_EMAIL    = var.admin_email
-    ADMIN_PASSWORD = var.admin_password
+    JWT_SECRET             = var.jwt_secret
+    DB_NAME                = "authdb"
+    DB_USER                = "authuser"
+    DB_PASSWORD            = var.db_password
+    ADMIN_EMAIL            = var.admin_email
+    ADMIN_PASSWORD         = var.admin_password
+    GRAFANA_ADMIN_PASSWORD = var.grafana_admin_password
   }
 }
 
@@ -152,7 +162,7 @@ resource "aws_instance" "gateway" {
   # 처음 켜질 때 한 번 실행되는 설치 스크립트.
   user_data = templatefile("${path.module}/user_data.sh", {
     region       = var.region
-    compose_url  = var.compose_url
+    repo_url     = var.repo_url
     param_prefix = "/zero-trust"
   })
 
@@ -162,4 +172,10 @@ resource "aws_instance" "gateway" {
   }
 
   depends_on = [aws_ssm_parameter.env]
+}
+
+# 고정 공인 IP. 서버를 다시 만들어도 주소가 바뀌지 않는다. 서버에 붙어 있는 동안은 무료.
+resource "aws_eip" "gateway" {
+  instance = aws_instance.gateway.id
+  tags     = { Project = "zero-trust" }
 }

@@ -1,5 +1,6 @@
 package com.zerotrust.gateway.auth;
 
+import com.zerotrust.gateway.metrics.SecurityMetrics;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -7,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
@@ -41,10 +43,21 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtVerifier jwtVerifier;
     private final AccessRules accessRules;
+    private final SecurityMetrics metrics;
+    private final int managementPort;
 
-    public JwtAuthFilter(JwtVerifier jwtVerifier, AccessRules accessRules) {
+    public JwtAuthFilter(JwtVerifier jwtVerifier, AccessRules accessRules, SecurityMetrics metrics,
+                         @Value("${management.server.port}") int managementPort) {
         this.jwtVerifier = jwtVerifier;
         this.accessRules = accessRules;
+        this.metrics = metrics;
+        this.managementPort = managementPort;
+    }
+
+    // 지표 포트(9091)로 온 요청은 검문하지 않는다. 이 포트는 바깥에 열려 있지 않고 Prometheus만 내부에서 읽는다.
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return request.getLocalPort() == managementPort;
     }
 
     @Override
@@ -62,6 +75,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (header == null || !header.startsWith(BEARER_PREFIX)) {
             log.warn("인증 실패: {} {} 사유=Authorization 헤더 없음 또는 Bearer 형식 아님",
                     request.getMethod(), request.getRequestURI());
+            metrics.unauthorized("missing_token");
             unauthorized(response);
             return;
         }
@@ -73,6 +87,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             user = jwtVerifier.verify(token);
         } catch (JwtException | IllegalArgumentException e) {
             log.warn("인증 실패: {} {} 사유={}", request.getMethod(), request.getRequestURI(), e.getClass().getSimpleName());
+            metrics.unauthorized("invalid_token");
             unauthorized(response);
             return;
         }
@@ -82,6 +97,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (!accessRules.isAllowed(request.getRequestURI(), user)) {
             log.warn("권한 없음: {} {} userId={} role={}",
                     request.getMethod(), request.getRequestURI(), user.userId(), user.role());
+            metrics.forbidden();
             writeError(response, HttpServletResponse.SC_FORBIDDEN, "FORBIDDEN", "접근 권한이 없습니다.");
             return;
         }

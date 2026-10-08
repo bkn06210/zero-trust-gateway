@@ -1,5 +1,6 @@
 package com.zerotrust.gateway.ratelimit;
 
+import com.zerotrust.gateway.metrics.SecurityMetrics;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,15 +36,18 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
     private static final int MAX_LOGIN_BODY_BYTES = 4 * 1024;
 
     private final RateLimiter rateLimiter;
+    private final SecurityMetrics metrics;
     private final Duration window;
     private final int perEmailIp;
     private final int perEmail;
 
     public LoginRateLimitFilter(RateLimiter rateLimiter,
+                                SecurityMetrics metrics,
                                 @Value("${ratelimit.login.window-seconds}") long windowSeconds,
                                 @Value("${ratelimit.login.per-email-ip}") int perEmailIp,
                                 @Value("${ratelimit.login.per-email}") int perEmail) {
         this.rateLimiter = rateLimiter;
+        this.metrics = metrics;
         this.window = Duration.ofSeconds(windowSeconds);
         this.perEmailIp = perEmailIp;
         this.perEmail = perEmail;
@@ -89,6 +93,7 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
                 // 보안 이벤트. 이메일은 식별을 위해 남기되 비밀번호는 절대 남기지 않는다.
                 log.warn("로그인 제한: email={} ip={} 시도={}회(email+ip) {}회(email)",
                         email, ip, byEmailIp.count(), byEmail.count());
+                metrics.loginAttempt("rate_limited");
                 response.setHeader("Retry-After", String.valueOf(Math.max(retryAfter, 1)));
                 writeError(response, 429, "TOO_MANY_REQUESTS", "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.");
                 return;
@@ -100,6 +105,7 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
         }
 
         // 5. 한도 안. 성공 시 카운터를 지울 수 있게 키를 붙여 두고 다음으로.
+        metrics.loginAttempt("allowed");
         wrapped.setAttribute(KEYS_ATTRIBUTE, List.of(emailIpKey, emailKey));
         filterChain.doFilter(wrapped, response);
     }

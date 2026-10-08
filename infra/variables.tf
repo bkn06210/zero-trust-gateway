@@ -1,7 +1,7 @@
 variable "region" {
-  description = "AWS 리전"
+  description = "AWS 리전. 새 가입 구조에서는 가입 시 정해진 리전 하나만 허용된다"
   type        = string
-  default     = "ap-northeast-2"
+  default     = "ap-southeast-2"
 }
 
 variable "instance_type" {

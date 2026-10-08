@@ -73,8 +73,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         // 2. Authorization 헤더에서 토큰을 꺼낸다. 없거나 형식이 다르면 401.
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (header == null || !header.startsWith(BEARER_PREFIX)) {
-            log.warn("인증 실패: {} {} 사유=Authorization 헤더 없음 또는 Bearer 형식 아님",
-                    request.getMethod(), request.getRequestURI());
+            log.warn("인증 실패: {} {} ip={} 사유=Authorization 헤더 없음 또는 Bearer 형식 아님",
+                    request.getMethod(), request.getRequestURI(), request.getRemoteAddr());
             metrics.unauthorized("missing_token");
             unauthorized(response);
             return;
@@ -86,7 +86,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         try {
             user = jwtVerifier.verify(token);
         } catch (JwtException | IllegalArgumentException e) {
-            log.warn("인증 실패: {} {} 사유={}", request.getMethod(), request.getRequestURI(), e.getClass().getSimpleName());
+            log.warn("인증 실패: {} {} ip={} 사유={}", request.getMethod(), request.getRequestURI(),
+                    request.getRemoteAddr(), e.getClass().getSimpleName());
             metrics.unauthorized("invalid_token");
             unauthorized(response);
             return;
@@ -95,8 +96,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         // 4. 인가: 누구인지는 확인됐다. 이제 이 역할로 이 경로에 들어가도 되는지 본다.
         //    role은 서명 검증을 통과한 토큰에서 꺼낸 값이라 클라이언트가 바꿀 수 없다.
         if (!accessRules.isAllowed(request.getRequestURI(), user)) {
-            log.warn("권한 없음: {} {} userId={} role={}",
-                    request.getMethod(), request.getRequestURI(), user.userId(), user.role());
+            log.warn("권한 없음: {} {} ip={} userId={} role={}",
+                    request.getMethod(), request.getRequestURI(), request.getRemoteAddr(), user.userId(), user.role());
             metrics.forbidden();
             writeError(response, HttpServletResponse.SC_FORBIDDEN, "FORBIDDEN", "접근 권한이 없습니다.");
             return;

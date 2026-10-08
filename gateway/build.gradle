@@ -26,6 +26,9 @@ ext['jackson-2-bom.version'] = '2.21.7'
 dependencies {
 	// Spring Cloud Gateway를 쓰지 않는다. 일반 web 위에 Filter와 전달 로직을 직접 구현한다.
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	// 지표 노출: /actuator/prometheus 에 요청 수, 응답 시간, JVM 메모리 등을 Prometheus 형식으로 내보낸다
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'

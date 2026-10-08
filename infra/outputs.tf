@@ -1,10 +1,10 @@
 output "public_ip" {
   description = "서버 공인 IP"
-  value       = aws_instance.gateway.public_ip
+  value       = aws_eip.gateway.public_ip
 }
 
 output "gateway_url" {
-  value = "http://${aws_instance.gateway.public_ip}:8080"
+  value = "http://${aws_eip.gateway.public_ip}:8080"
 }
 
 output "instance_id" {
@@ -12,5 +12,10 @@ output "instance_id" {
 }
 
 output "ssh" {
-  value = "ssh -i ~/.ssh/zero-trust ec2-user@${aws_instance.gateway.public_ip}"
+  value = "ssh -i ~/.ssh/zero-trust ec2-user@${aws_eip.gateway.public_ip}"
 }
+
+output "grafana_url" {
+  value = "http://${aws_eip.gateway.public_ip}:3000"
+}
+

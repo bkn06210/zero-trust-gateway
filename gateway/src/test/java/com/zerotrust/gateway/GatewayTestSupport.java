@@ -74,10 +74,14 @@ public abstract class GatewayTestSupport {
         registry.add("services.auth.url", () -> "http://localhost:" + BACKEND.getAddress().getPort());
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        registry.add("management.server.port", () -> "0");   // 지표 포트도 임의 포트로
     }
 
     @Value("${local.server.port}")
     private int port;
+
+    @Value("${local.management.port}")
+    protected int managementPort;
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -126,5 +130,10 @@ public abstract class GatewayTestSupport {
 
     protected int getWithToken(String token) throws Exception {
         return call("GET", "/users/me", "Authorization", "Bearer " + token);
+    }
+
+    protected String metrics() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + managementPort + "/actuator/prometheus")).GET().build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString()).body();
     }
 }

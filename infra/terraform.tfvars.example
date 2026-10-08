@@ -5,3 +5,4 @@ jwt_secret          = "change-me"                  # openssl rand -base64 48
 db_password         = "change-me"
 admin_email         = "admin@example.com"
 admin_password      = "change-me"
+grafana_admin_password = "change-me"

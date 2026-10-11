@@ -36,6 +36,8 @@ public abstract class GatewayTestSupport {
 
     // 가짜 뒤쪽 서버: 로그인은 비밀번호가 "correct-password"일 때만 200, 아니면 401. 나머지 경로는 200.
     protected static final String CORRECT_PASSWORD = "correct-password";
+    // 이 비밀번호로 로그인하면 "바빠서 거절"을 흉내 낸다: 503, Retry-After, 그리고 밖으로 나가면 안 되는 헤더 하나.
+    protected static final String BUSY_PASSWORD = "busy-password";
     protected static final HttpServer BACKEND;
     protected static final AtomicInteger BACKEND_CALLS = new AtomicInteger();
     protected static final AtomicReference<Headers> LAST_HEADERS = new AtomicReference<>();
@@ -59,6 +61,11 @@ public abstract class GatewayTestSupport {
 
             boolean login = exchange.getRequestURI().getPath().equals("/auth/login");
             int status = (login && !body.contains(CORRECT_PASSWORD)) ? 401 : 200;
+            if (login && body.contains(BUSY_PASSWORD)) {
+                status = 503;
+                exchange.getResponseHeaders().set("Retry-After", "1");
+                exchange.getResponseHeaders().set("X-Internal-Debug", "must-not-leak");
+            }
             byte[] response = "{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(status, response.length);
@@ -75,6 +82,9 @@ public abstract class GatewayTestSupport {
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
         registry.add("management.server.port", () -> "0");   // 지표 포트도 임의 포트로
+        // 통합 테스트는 전부 같은 PC(IP 하나)에서 보내서, 합치면 1분에 30번을 넘는다. IP 한도에 걸려 다른 테스트가 깨지지 않게 올려 둔다.
+        // IP 한도 자체는 IP를 바꿔 가며 보낼 수 있는 LoginRateLimitFilterTest가 확인한다.
+        registry.add("ratelimit.login.per-ip", () -> "1000");
     }
 
     @Value("${local.server.port}")

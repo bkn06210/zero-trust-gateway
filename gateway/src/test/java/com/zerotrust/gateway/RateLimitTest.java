@@ -104,6 +104,16 @@ class RateLimitTest extends GatewayTestSupport {
     }
 
     @Test
+    @DisplayName("뒤쪽이 바빠서 거절하면 503과 Retry-After는 전달하고, 허용하지 않은 응답 헤더는 버린다")
+    void busyResponseKeepsRetryAfterOnly() throws Exception {
+        HttpResponse<String> busy = login(newEmail(), BUSY_PASSWORD);
+
+        assertThat(busy.statusCode()).isEqualTo(503);
+        assertThat(busy.headers().firstValue("Retry-After")).hasValue("1");
+        assertThat(busy.headers().firstValue("X-Internal-Debug")).isEmpty();
+    }
+
+    @Test
     @DisplayName("지나치게 큰 로그인 본문은 413으로 거절한다")
     void oversizedBodyIsRejected() throws Exception {
         String huge = "{\"email\":\"" + newEmail() + "\",\"password\":\"" + "a".repeat(10_000) + "\"}";

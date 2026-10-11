@@ -36,6 +36,10 @@ public class ProxyController {
     // X-User-* 는 여기 없으므로, 클라이언트가 직접 써서 보낸 것은 자동으로 떨어져 나간다.
     private static final List<String> FORWARDED_HEADERS = List.of("Content-Type", "Accept");
 
+    // 뒤쪽 응답에서 클라이언트로 돌려줄 헤더. 응답도 허용한 것만 넘긴다 (Content-Type은 아래에서 따로 옮긴다).
+    // Retry-After: 뒤쪽이 바빠서 503으로 거절할 때 "몇 초 뒤 다시"를 알려 주는 값. 클라이언트까지 가야 의미가 있다.
+    private static final List<String> RETURNED_HEADERS = List.of("Retry-After");
+
     // 경로 앞부분 → 어느 서비스로 보낼지.
     private final Map<String, String> routes;
     private final RestClient restClient;
@@ -109,6 +113,13 @@ public class ProxyController {
                 MediaType contentType = res.getHeaders().getContentType();
                 if (contentType != null) {
                     builder.contentType(contentType);
+                }
+                // 허용한 응답 헤더만 복사한다. 뒤쪽이 실수로 내부 정보를 헤더에 실어도 밖으로 나가지 않는다.
+                for (String name : RETURNED_HEADERS) {
+                    String value = res.getHeaders().getFirst(name);
+                    if (value != null) {
+                        builder.header(name, value);
+                    }
                 }
                 return builder.body(res.getBody().readAllBytes());
             });

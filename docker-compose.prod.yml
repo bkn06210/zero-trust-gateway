@@ -10,6 +10,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       SERVICES_AUTH_URL: http://auth-service:8081
       REDIS_HOST: redis
+      # 부하를 잴 때만 올린다. 지정하지 않으면 1분에 IP당 30회.
+      RATELIMIT_LOGIN_PER_IP: ${RATELIMIT_LOGIN_PER_IP:-30}
     depends_on:
       auth-service:
         condition: service_started
@@ -27,6 +29,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      # 부하를 잴 때만 바꾼다. 0이면 서버의 CPU 개수만큼 BCrypt를 동시에 돌린다.
+      BCRYPT_MAX_CONCURRENT: ${BCRYPT_MAX_CONCURRENT:-0}
     depends_on:
       postgres:
         condition: service_healthy

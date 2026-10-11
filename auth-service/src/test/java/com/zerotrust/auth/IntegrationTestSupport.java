@@ -35,6 +35,9 @@ public abstract class IntegrationTestSupport {
         registry.add("jwt.secret", () -> "test-only-secret-key-for-integration-tests-0123456789");
         // 유예 시간이 지난 경우를 테스트하려면 기다려야 하므로, 테스트에서는 1초로 줄인다.
         registry.add("refresh.reuse-grace-seconds", () -> "1");
+        // 동시 가입 50건 같은 테스트는 BCrypt 자리를 1초 넘게 기다리는 요청이 생긴다. 여기서 보려는 건 과부하 거절이 아니라
+        // 동시성이므로, 503이 섞이지 않게 대기 시간을 넉넉히 준다. 거절 동작은 LimitedPasswordEncoderTest가 따로 확인한다.
+        registry.add("bcrypt.max-wait-ms", () -> "30000");
         registry.add("admin.email", () -> ADMIN_EMAIL);
         registry.add("admin.password", () -> ADMIN_PASSWORD);
     }

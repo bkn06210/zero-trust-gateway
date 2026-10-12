@@ -12,4 +12,7 @@ infra/.terraform/
 infra/*.tfstate
 infra/*.tfstate.backup
 infra/terraform.tfvars
+# 계획 파일에는 Terraform에 넘긴 비밀값이 암호화 없이 그대로 들어간다. 압축 파일이라 비밀값 스캐너도 보지 못한다.
+infra/*.out
+infra/*.tfplan
 infra/.terraform.lock.hcl

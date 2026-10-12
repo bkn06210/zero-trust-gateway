@@ -62,6 +62,16 @@ jobs:
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # gitleaks는 글자로 된 비밀값 모양을 찾는다. Terraform 계획 파일은 압축 파일이라 안에 비밀값이 평문으로 있어도 보지 못한다.
+      # 그래서 올라오면 안 되는 파일은 내용이 아니라 이름으로 한 번 더 막는다.
+      - name: Block files that must never be committed
+        run: |
+          FOUND=$(git ls-files | grep -E '\.tfstate$|\.tfstate\.backup$|\.tfplan$|\.tfvars$|^infra/.*\.out$|(^|/)\.env$' || true)
+          if [ -n "$FOUND" ]; then
+            echo "올라오면 안 되는 파일이 저장소에 있습니다:"
+            echo "$FOUND"
+            exit 1
+          fi
 
   # 4. 이미지 취약점 스캔. 이미지 안의 OS 패키지와 자바 라이브러리에 알려진 취약점(CVE)이 있는지.
   trivy:

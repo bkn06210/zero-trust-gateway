@@ -1,0 +1,8 @@
+# 노트북 안에 만드는 연습용 쿠버네티스 클러스터의 구성.
+# 만들기: kind create cluster --config deploy/local/kind-cluster.yaml
+# 지우기: kind delete cluster --name zero-trust
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: zero-trust
+nodes:
+  - role: control-plane

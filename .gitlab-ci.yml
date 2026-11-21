@@ -36,6 +36,9 @@ test:
 semgrep:
   stage: verify
   image: semgrep/semgrep
+  variables:
+    # 이 이미지는 코드가 /src에 있다고 가정한다. GitLab은 코드를 다른 폴더에 받으므로 그 위치를 알려 준다.
+    SEMGREP_SRC_DIRECTORY: $CI_PROJECT_DIR
   script:
     - semgrep scan --config p/java --config p/secrets --config p/owasp-top-ten --error
 

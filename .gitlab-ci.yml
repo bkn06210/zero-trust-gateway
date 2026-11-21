@@ -8,6 +8,7 @@ workflow:
 stages:
   - verify
   - build
+  - scan
 
 # 1. 빌드 + 테스트. 서비스마다 따로 돌려서 어느 쪽이 깨졌는지 바로 보이게 한다.
 test:
@@ -92,3 +93,22 @@ build-image:
     paths:
       - digests/
     expire_in: 1 week
+
+# 5. 이미지 취약점 검사. 이미지 안의 OS 패키지와 자바 라이브러리에 알려진 취약점(CVE)이 있는지 본다.
+#    이미지를 다시 만들지 않는다. 앞 작업이 적어 둔 다이제스트의 이미지를 저장소에서 받아 검사한다.
+scan-image:
+  stage: scan
+  image:
+    name: aquasec/trivy:0.70.0
+    entrypoint: [""]
+  variables:
+    TRIVY_USERNAME: $CI_REGISTRY_USER
+    TRIVY_PASSWORD: $CI_REGISTRY_PASSWORD
+  parallel:
+    matrix:
+      - SERVICE: [auth-service, gateway]
+  script:
+    - IMAGE=$(cat "digests/$SERVICE.txt")
+    - echo "검사 대상 $IMAGE"
+    # 심각도가 높고, 고친 버전이 나와 있는 것만 실패시킨다. 고칠 방법이 없는 것으로 막히면 할 수 있는 일이 없다.
+    - trivy image --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 "$IMAGE"

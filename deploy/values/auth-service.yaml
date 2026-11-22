@@ -1,0 +1,16 @@
+image:
+  repository: registry.gitlab.com/bkn06210-lab/zero-trust-gateway/auth-service
+  digest: sha256:7d99b62dfb1793c04e991b1405624e79a72df3a6ca655100d83710c655b61d68
+
+port: 8081
+
+env:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
+
+secretEnv:
+  - JWT_SECRET
+  - DB_NAME
+  - DB_USER
+  - DB_PASSWORD
+  - ADMIN_EMAIL
+  - ADMIN_PASSWORD

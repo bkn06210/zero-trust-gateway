@@ -1,0 +1,12 @@
+image:
+  repository: registry.gitlab.com/bkn06210-lab/zero-trust-gateway/gateway
+  digest: sha256:8eebaab8c061a3d3b85e807810cb4e2e7a4fe4551726b813bbfe81f9c7ef3f43
+
+port: 8080
+
+env:
+  SERVICES_AUTH_URL: http://auth-service:8081
+  REDIS_HOST: redis
+
+secretEnv:
+  - JWT_SECRET

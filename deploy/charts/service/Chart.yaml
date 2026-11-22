@@ -1,5 +1,0 @@
-apiVersion: v2
-name: service
-description: Spring Boot 서비스 하나를 쿠버네티스에 띄우는 공통 양식. 값 파일만 바꿔 여러 서비스가 같이 쓴다.
-type: application
-version: 0.1.0

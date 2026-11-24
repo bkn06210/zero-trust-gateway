@@ -1,0 +1,57 @@
+// deployctl은 배포 설정 저장소의 CI에서 실행하는 검사 도구다.
+// 실패하면 종료 코드 1로 끝나서 CI 작업이 실패한다.
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+)
+
+func main() {
+	if len(os.Args) < 2 {
+		usage()
+	}
+	switch os.Args[1] {
+	case "verify-image":
+		os.Exit(runVerifyImage(os.Args[2:]))
+	default:
+		usage()
+	}
+}
+
+func usage() {
+	fmt.Fprintln(os.Stderr, "사용법: deployctl verify-image [-gitlab 주소] 값파일...")
+	os.Exit(2)
+}
+
+func runVerifyImage(args []string) int {
+	fs := flag.NewFlagSet("verify-image", flag.ExitOnError)
+	base := fs.String("gitlab", "https://gitlab.com/api/v4", "GitLab API 주소")
+	registry := fs.String("registry", "registry.gitlab.com", "이미지 저장소 호스트")
+	fs.Parse(args)
+	if fs.NArg() == 0 {
+		usage()
+	}
+	c := newClient(*base, os.Getenv("GITLAB_TOKEN"))
+
+	failed := false
+	for _, path := range fs.Args() {
+		img, err := readImageRef(path)
+		if err == nil {
+			var ev *imageEvidence
+			ev, err = verifyImage(c, *registry, img)
+			if err == nil {
+				fmt.Printf("통과 %s\n  이미지 %s@%s\n  코드 커밋 %s\n  파이프라인 %s\n", path, img.Repository, img.Digest, img.Commit, ev.PipelineURL)
+				continue
+			}
+		}
+		failed = true
+		fmt.Printf("실패 %s\n  %s\n", path, strings.ReplaceAll(err.Error(), "\n", "\n  "))
+	}
+	if failed {
+		return 1
+	}
+	return 0
+}

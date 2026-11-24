@@ -9,7 +9,7 @@ set -euo pipefail
 CTX=kind-zero-trust
 NS=zero-trust
 ARGOCD_VERSION=v3.6.2
-DEPLOY_REPO_RAW=https://gitlab.com/bkn06210-lab/zero-trust-deploy/-/raw/main
+DEPLOY_REPO_RAW=https://gitlab.com/bkn06210-lab/zero-trust-deploy/-/raw/deployed
 
 kubectl --context "$CTX" create namespace "$NS" --dry-run=client -o yaml | kubectl --context "$CTX" apply -f -
 

@@ -49,3 +49,9 @@ variable "admin_password" {
   type      = string
   sensitive = true
 }
+
+variable "gitlab_project_path" {
+  description = "AWS 역할을 받을 수 있는 GitLab 프로젝트. 그룹/프로젝트"
+  type        = string
+  default     = "bkn06210-lab/zero-trust-gateway"
+}

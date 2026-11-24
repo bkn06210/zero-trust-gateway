@@ -11,8 +11,18 @@ stages:
   - scan
 
 # 1. 빌드 + 테스트. 서비스마다 따로 돌려서 어느 쪽이 깨졌는지 바로 보이게 한다.
+# 코드나 CI 정의가 바뀐 push에서만 돈다. 문서만 고친 push에서 이미지를 다시 만들지 않기 위해서다.
+# 이미지가 새로 생기는 커밋은 항상 이 조건에 걸리므로, 배포 전 검사가 찾는 작업 기록은 빠지지 않는다.
+.code-changed:
+  rules:
+    - changes:
+        - auth-service/**/*
+        - gateway/**/*
+        - .gitlab-ci.yml
+
 test:
   stage: verify
+  extends: .code-changed
   image: eclipse-temurin:21-jdk
   # Testcontainers는 Docker가 필요하다. GitHub 러너에는 Docker가 켜져 있었지만
   # GitLab의 작업은 컨테이너 안에서 돌기 때문에, Docker를 옆에 따로 띄워서 붙인다.
@@ -37,6 +47,7 @@ test:
 # 2. 정적 분석(SAST). 코드를 실행하지 않고 패턴으로 취약점을 찾는다.
 semgrep:
   stage: verify
+  extends: .code-changed
   image: semgrep/semgrep
   variables:
     # 이 이미지는 코드가 /src에 있다고 가정한다. GitLab은 코드를 다른 폴더에 받으므로 그 위치를 알려 준다.
@@ -67,8 +78,31 @@ gitleaks:
 
 # 4. 이미지 만들기. 앞 단계의 검사가 전부 통과했을 때만 시작한다.
 #    이미지는 여기서 한 번만 만든다. 뒤의 작업들은 다시 만들지 않고 여기서 적어 둔 다이제스트로 같은 이미지를 가리킨다.
+# AWS 역할을 저장된 키 없이 받는다.
+# GitLab이 이 작업에만 유효한 증명서를 발급하고, AWS가 그 서명과 출처를 확인한 뒤 임시 자격을 준다.
+# AWS 쪽 조건은 "이 프로젝트의 main 브랜치"다. infra/gitlab_oidc.tf
+aws-oidc-check:
+  stage: verify
+  image:
+    name: amazon/aws-cli:2.37.10
+    entrypoint: [""]
+  rules:
+    - if: $AWS_ROLE_ARN
+  id_tokens:
+    AWS_ID_TOKEN:
+      aud: https://gitlab.com
+  variables:
+    AWS_REGION: ap-southeast-2
+  script:
+    - echo "$AWS_ID_TOKEN" > /tmp/web-identity-token
+    - export AWS_WEB_IDENTITY_TOKEN_FILE=/tmp/web-identity-token
+    - export AWS_ROLE_SESSION_NAME="gitlab-$CI_PIPELINE_ID"
+    # 받은 신원을 찍는다. 계정 번호는 가린다.
+    - aws sts get-caller-identity --query Arn --output text | sed -E 's/[0-9]{12}/<account>/'
+
 build-image:
   stage: build
+  extends: .code-changed
   image: docker:27
   services:
     - name: docker:27-dind
@@ -99,6 +133,7 @@ build-image:
 #    이미지를 다시 만들지 않는다. 앞 작업이 적어 둔 다이제스트의 이미지를 저장소에서 받아 검사한다.
 scan-image:
   stage: scan
+  extends: .code-changed
   image:
     name: aquasec/trivy:0.70.0
     entrypoint: [""]

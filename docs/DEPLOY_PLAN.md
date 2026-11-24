@@ -64,8 +64,10 @@
 
 ### 4. 접근 제어
 
-- [ ] AWS 권한을 액세스 키 대신 OIDC로 받기
-- [ ] 우회 시도: 기능 브랜치의 작업이 운영 배포용 AWS 역할을 받아 보기
+- [x] AWS 권한을 액세스 키 대신 OIDC로 받기
+- [x] 우회 시도: 기능 브랜치의 작업이 운영 배포용 AWS 역할을 받아 보기
+  - 브랜치를 만들어 CI 파일을 고치고 같은 역할을 요청했다. 역할 주소는 알고 있는 상태였다. AWS가 `AccessDenied: Not authorized to perform sts:AssumeRoleWithWebIdentity`로 거부했다. 2026-11-24
+  - 남은 일: 실제 서버 배포는 아직 GitHub Actions에 있고 저장된 키를 쓴다. 옮긴 뒤 그 키를 지운다
 
 ### 5. 설정 통제
 

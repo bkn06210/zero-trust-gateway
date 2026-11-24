@@ -77,13 +77,25 @@ func buildDeployRequest(ctx context.Context, c *client, ai anthropic.Client, mod
 	project := rest[:i]
 
 	// 사실 부분: 코드 저장소에 두 커밋의 차이를 묻는다.
+	// straight=true로 두 커밋을 직접 비교한다. 기본값은 공통 조상부터의 차이라서,
+	// 예전 버전으로 되돌리는 배포에서는 "바뀐 것이 없다"고 나온다.
 	var cmp compareResult
-	q := url.Values{"from": {oldImg.Commit}, "to": {newImg.Commit}}
+	q := url.Values{"from": {oldImg.Commit}, "to": {newImg.Commit}, "straight": {"true"}}
 	if err := c.getJSON(projectPath(project)+"/repository/compare", q, &cmp); err != nil {
 		return "", err
 	}
 	if cmp.CompareTimeout {
 		return "", fmt.Errorf("GitLab이 차이 계산을 끝내지 못했습니다. 일부만 가지고 요약하지 않습니다")
+	}
+
+	// 새로 들어오는 커밋이 없는데 커밋이 다르면 예전 버전으로 가는 것이다.
+	// 그때는 반대 방향으로 물어서 빠지는 커밋을 구한다.
+	var dropped compareResult
+	if len(cmp.Commits) == 0 {
+		rq := url.Values{"from": {newImg.Commit}, "to": {oldImg.Commit}, "straight": {"true"}}
+		if err := c.getJSON(projectPath(project)+"/repository/compare", rq, &dropped); err != nil {
+			return "", err
+		}
 	}
 
 	// 이 이미지에 들어가는 것은 서비스 폴더의 코드이고, 이미지를 만들고 검사하는 방법은 CI 정의에 있다.
@@ -106,9 +118,16 @@ func buildDeployRequest(ctx context.Context, c *client, ai anthropic.Client, mod
 	b.WriteString("## 사실\n\n기록에서 그대로 가져온 내용입니다.\n\n")
 	fmt.Fprintf(&b, "- 이미지: `%s` → `%s`\n", shortDigest(oldImg.Digest), shortDigest(newImg.Digest))
 	fmt.Fprintf(&b, "- 코드 커밋: `%.8s` → `%.8s`\n", oldImg.Commit, newImg.Commit)
-	fmt.Fprintf(&b, "- 그 사이의 커밋 %d개\n", len(cmp.Commits))
-	for _, cm := range cmp.Commits {
-		fmt.Fprintf(&b, "  - `%s` %s (%s)\n", cm.ShortID, cm.Title, cm.AuthorName)
+	if len(dropped.Commits) > 0 {
+		fmt.Fprintf(&b, "- **예전 버전으로 되돌리는 배포입니다.** 아래 커밋 %d개가 빠집니다\n", len(dropped.Commits))
+		for _, cm := range dropped.Commits {
+			fmt.Fprintf(&b, "  - `%s` %s (%s)\n", cm.ShortID, cm.Title, cm.AuthorName)
+		}
+	} else {
+		fmt.Fprintf(&b, "- 새로 들어오는 커밋 %d개\n", len(cmp.Commits))
+		for _, cm := range cmp.Commits {
+			fmt.Fprintf(&b, "  - `%s` %s (%s)\n", cm.ShortID, cm.Title, cm.AuthorName)
+		}
 	}
 	fmt.Fprintf(&b, "- 이 이미지와 관련된 파일 %d개 변경, 관련 없는 파일 %d개는 제외\n", len(files), skipped)
 	for _, f := range files {

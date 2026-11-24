@@ -26,6 +26,10 @@ func main() {
 		os.Exit(runTrace(os.Args[2:]))
 	case "verify-settings":
 		os.Exit(runVerifySettings(os.Args[2:]))
+	case "eval-summary":
+		os.Exit(runEvalSummary(os.Args[2:]))
+	case "deploy-request":
+		os.Exit(runDeployRequest(os.Args[2:]))
 	default:
 		usage()
 	}
@@ -38,6 +42,8 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  deployctl record -project 그룹/프로젝트 -commit 커밋 [-out 파일] 값파일...")
 	fmt.Fprintln(os.Stderr, "  deployctl trace -project 그룹/프로젝트 -commit 커밋 -service 이름 -image 저장소@다이제스트")
 	fmt.Fprintln(os.Stderr, "  deployctl verify-settings -project 그룹/프로젝트 [-expect 파일]")
+	fmt.Fprintln(os.Stderr, "  deployctl deploy-request [-base git참조] [-out 파일] 값파일...")
+	fmt.Fprintln(os.Stderr, "  deployctl eval-summary [-cases 폴더] [-runs 횟수] [-out 파일]")
 	os.Exit(2)
 }
 

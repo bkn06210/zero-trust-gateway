@@ -1,0 +1,215 @@
+diff --git a/gateway/src/main/java/com/zerotrust/gateway/auth/AccessRules.java b/gateway/src/main/java/com/zerotrust/gateway/auth/AccessRules.java
+index 5faa3a3..bfa27ed 100644
+--- a/gateway/src/main/java/com/zerotrust/gateway/auth/AccessRules.java
++++ b/gateway/src/main/java/com/zerotrust/gateway/auth/AccessRules.java
+@@ -17,8 +17,7 @@ public class AccessRules {
+ 
+     // 이 사용자가 이 경로에 들어가도 되는가.
+     public boolean isAllowed(String path, AuthenticatedUser user) {
+-        // 대소문자를 바꿔 규칙을 피해 가지 못하게 소문자로 맞춰 비교한다.
+-        String normalized = path.toLowerCase();
++        String normalized = path;
+         return REQUIRED_ROLE_BY_PREFIX.entrySet().stream()
+                 .filter(rule -> normalized.startsWith(rule.getKey()))
+                 .allMatch(rule -> rule.getValue().equals(user.role()));
+diff --git a/gateway/src/main/java/com/zerotrust/gateway/auth/JwtAuthFilter.java b/gateway/src/main/java/com/zerotrust/gateway/auth/JwtAuthFilter.java
+index 104099b..44e07c3 100644
+--- a/gateway/src/main/java/com/zerotrust/gateway/auth/JwtAuthFilter.java
++++ b/gateway/src/main/java/com/zerotrust/gateway/auth/JwtAuthFilter.java
+@@ -1,6 +1,6 @@
+ package com.zerotrust.gateway.auth;
+ 
+-import com.zerotrust.gateway.metrics.SecurityMetrics;
++import com.zerotrust.gateway.securityMetrics.SecurityMetrics;
+ import io.jsonwebtoken.JwtException;
+ import jakarta.servlet.FilterChain;
+ import jakarta.servlet.ServletException;
+@@ -25,7 +25,7 @@ import java.util.Set;
+ @Order(Ordered.HIGHEST_PRECEDENCE + 1)   // 로그인 횟수 제한 필터 다음
+ public class JwtAuthFilter extends OncePerRequestFilter {
+ 
+-    private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
++    private static final Logger logger = LoggerFactory.getLogger(JwtAuthFilter.class);
+ 
+     // 검증된 신원을 다음 단계(요청 전달)로 넘길 때 쓰는 이름표.
+     public static final String USER_ATTRIBUTE = "authenticatedUser";
+@@ -41,23 +41,23 @@ public class JwtAuthFilter extends OncePerRequestFilter {
+             "POST /auth/logout"
+     );
+ 
+-    private final JwtVerifier jwtVerifier;
+-    private final AccessRules accessRules;
+-    private final SecurityMetrics metrics;
+-    private final int managementPort;
+-
+-    public JwtAuthFilter(JwtVerifier jwtVerifier, AccessRules accessRules, SecurityMetrics metrics,
+-                         @Value("${management.server.port}") int managementPort) {
+-        this.jwtVerifier = jwtVerifier;
+-        this.accessRules = accessRules;
+-        this.metrics = metrics;
+-        this.managementPort = managementPort;
++    private final JwtVerifier tokenVerifier;
++    private final AccessRules accessPolicy;
++    private final SecurityMetrics securityMetrics;
++    private final int mgmtPort;
++
++    public JwtAuthFilter(JwtVerifier tokenVerifier, AccessRules accessPolicy, SecurityMetrics securityMetrics,
++                         @Value("${management.server.port}") int mgmtPort) {
++        this.tokenVerifier = tokenVerifier;
++        this.accessPolicy = accessPolicy;
++        this.securityMetrics = securityMetrics;
++        this.mgmtPort = mgmtPort;
+     }
+ 
+     // 지표 포트(9091)로 온 요청은 검문하지 않는다. 이 포트는 바깥에 열려 있지 않고 Prometheus만 내부에서 읽는다.
+     @Override
+     protected boolean shouldNotFilter(HttpServletRequest request) {
+-        return request.getLocalPort() == managementPort;
++        return request.getLocalPort() == mgmtPort;
+     }
+ 
+     @Override
+@@ -73,9 +73,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
+         // 2. Authorization 헤더에서 토큰을 꺼낸다. 없거나 형식이 다르면 401.
+         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+         if (header == null || !header.startsWith(BEARER_PREFIX)) {
+-            log.warn("인증 실패: {} {} ip={} 사유=Authorization 헤더 없음 또는 Bearer 형식 아님",
++            logger.warn("인증 실패: {} {} ip={} 사유=Authorization 헤더 없음 또는 Bearer 형식 아님",
+                     request.getMethod(), request.getRequestURI(), request.getRemoteAddr());
+-            metrics.unauthorized("missing_token");
++            securityMetrics.unauthorized("missing_token");
+             unauthorized(response);
+             return;
+         }
+@@ -84,21 +84,21 @@ public class JwtAuthFilter extends OncePerRequestFilter {
+         // 3. 인증: 서명, 만료, 필수 클레임 검증. 실패 사유는 전부 JwtException으로 온다.
+         AuthenticatedUser user;
+         try {
+-            user = jwtVerifier.verify(token);
++            user = tokenVerifier.verify(token);
+         } catch (JwtException | IllegalArgumentException e) {
+-            log.warn("인증 실패: {} {} ip={} 사유={}", request.getMethod(), request.getRequestURI(),
++            logger.warn("인증 실패: {} {} ip={} 사유={}", request.getMethod(), request.getRequestURI(),
+                     request.getRemoteAddr(), e.getClass().getSimpleName());
+-            metrics.unauthorized("invalid_token");
++            securityMetrics.unauthorized("invalid_token");
+             unauthorized(response);
+             return;
+         }
+ 
+         // 4. 인가: 누구인지는 확인됐다. 이제 이 역할로 이 경로에 들어가도 되는지 본다.
+         //    role은 서명 검증을 통과한 토큰에서 꺼낸 값이라 클라이언트가 바꿀 수 없다.
+-        if (!accessRules.isAllowed(request.getRequestURI(), user)) {
+-            log.warn("권한 없음: {} {} ip={} userId={} role={}",
++        if (!accessPolicy.isAllowed(request.getRequestURI(), user)) {
++            logger.warn("권한 없음: {} {} ip={} userId={} role={}",
+                     request.getMethod(), request.getRequestURI(), request.getRemoteAddr(), user.userId(), user.role());
+-            metrics.forbidden();
++            securityMetrics.forbidden();
+             writeError(response, HttpServletResponse.SC_FORBIDDEN, "FORBIDDEN", "접근 권한이 없습니다.");
+             return;
+         }
+diff --git a/gateway/src/main/java/com/zerotrust/gateway/metrics/SecurityMetrics.java b/gateway/src/main/java/com/zerotrust/gateway/metrics/SecurityMetrics.java
+index bbd2c8f..64a564f 100644
+--- a/gateway/src/main/java/com/zerotrust/gateway/metrics/SecurityMetrics.java
++++ b/gateway/src/main/java/com/zerotrust/gateway/metrics/SecurityMetrics.java
+@@ -1,4 +1,4 @@
+-package com.zerotrust.gateway.metrics;
++package com.zerotrust.gateway.securityMetrics;
+ 
+ import io.micrometer.core.instrument.Counter;
+ import io.micrometer.core.instrument.MeterRegistry;
+diff --git a/gateway/src/main/java/com/zerotrust/gateway/proxy/ProxyController.java b/gateway/src/main/java/com/zerotrust/gateway/proxy/ProxyController.java
+index 82a745e..ffc22e2 100644
+--- a/gateway/src/main/java/com/zerotrust/gateway/proxy/ProxyController.java
++++ b/gateway/src/main/java/com/zerotrust/gateway/proxy/ProxyController.java
+@@ -30,7 +30,7 @@ import java.util.Map;
+ @RestController
+ public class ProxyController {
+ 
+-    private static final Logger log = LoggerFactory.getLogger(ProxyController.class);
++    private static final Logger logger = LoggerFactory.getLogger(ProxyController.class);
+ 
+     // 클라이언트 요청에서 뒤로 넘겨줄 헤더. 이것만 넘기고 나머지는 전부 버린다 (허용 목록).
+     // X-User-* 는 여기 없으므로, 클라이언트가 직접 써서 보낸 것은 자동으로 떨어져 나간다.
+@@ -133,7 +133,7 @@ public class ProxyController {
+             return result;
+         } catch (ResourceAccessException e) {
+             // 5. 뒤쪽 서비스에 연결 자체가 안 됨(죽었거나 시간 초과). 내부 주소는 응답에 싣지 않는다.
+-            log.error("뒤쪽 서비스 연결 실패: {} {}", request.getMethod(), uri, e);
++            logger.error("뒤쪽 서비스 연결 실패: {} {}", request.getMethod(), uri, e);
+             return json(HttpStatus.BAD_GATEWAY, "BAD_GATEWAY", "서비스에 연결할 수 없습니다.");
+         }
+     }
+diff --git a/gateway/src/main/java/com/zerotrust/gateway/ratelimit/LoginRateLimitFilter.java b/gateway/src/main/java/com/zerotrust/gateway/ratelimit/LoginRateLimitFilter.java
+index 5e9eb79..bc795a7 100644
+--- a/gateway/src/main/java/com/zerotrust/gateway/ratelimit/LoginRateLimitFilter.java
++++ b/gateway/src/main/java/com/zerotrust/gateway/ratelimit/LoginRateLimitFilter.java
+@@ -1,6 +1,6 @@
+ package com.zerotrust.gateway.ratelimit;
+ 
+-import com.zerotrust.gateway.metrics.SecurityMetrics;
++import com.zerotrust.gateway.securityMetrics.SecurityMetrics;
+ import jakarta.servlet.FilterChain;
+ import jakarta.servlet.ServletException;
+ import jakarta.servlet.http.HttpServletRequest;
+@@ -27,7 +27,7 @@ import java.util.Map;
+ @Order(Ordered.HIGHEST_PRECEDENCE)
+ public class LoginRateLimitFilter extends OncePerRequestFilter {
+ 
+-    private static final Logger log = LoggerFactory.getLogger(LoginRateLimitFilter.class);
++    private static final Logger logger = LoggerFactory.getLogger(LoginRateLimitFilter.class);
+ 
+     // 로그인 성공 시 카운터를 지울 수 있도록, 이 요청에 쓴 키들을 다음 단계에 알려주는 이름표.
+     public static final String KEYS_ATTRIBUTE = "rateLimitKeys";
+@@ -36,7 +36,7 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
+     private static final int MAX_LOGIN_BODY_BYTES = 4 * 1024;
+ 
+     private final RateLimiter rateLimiter;
+-    private final SecurityMetrics metrics;
++    private final SecurityMetrics securityMetrics;
+     private final Duration window;
+     private final int perIp;
+     private final int perEmailIp;
+@@ -47,13 +47,13 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
+     }
+ 
+     public LoginRateLimitFilter(RateLimiter rateLimiter,
+-                                SecurityMetrics metrics,
++                                SecurityMetrics securityMetrics,
+                                 @Value("${ratelimit.login.window-seconds}") long windowSeconds,
+                                 @Value("${ratelimit.login.per-ip}") int perIp,
+                                 @Value("${ratelimit.login.per-email-ip}") int perEmailIp,
+                                 @Value("${ratelimit.login.per-email}") int perEmail) {
+         this.rateLimiter = rateLimiter;
+-        this.metrics = metrics;
++        this.securityMetrics = securityMetrics;
+         this.window = Duration.ofSeconds(windowSeconds);
+         this.perIp = perIp;
+         this.perEmailIp = perEmailIp;
+@@ -105,8 +105,8 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
+                     // 3-1. 넘었다. 여기서 끊고, 아직 세지 않은 아래 기준은 건드리지 않는다.
+                     //      막힌 요청까지 이메일 카운터를 올리면, 공격자 혼자서 남의 이메일 한도를 채워 계정 주인을 잠글 수 있다.
+                     // 보안 이벤트. 이메일은 식별을 위해 남기되 비밀번호는 절대 남기지 않는다.
+-                    log.warn("로그인 제한: 기준={} email={} ip={} 시도={}회", rule.name(), email, ip, hit.count());
+-                    metrics.loginAttempt("rate_limited");
++                    logger.warn("로그인 제한: 기준={} email={} ip={} 시도={}회", rule.name(), email, ip, hit.count());
++                    securityMetrics.loginAttempt("rate_limited");
+                     response.setHeader("Retry-After", String.valueOf(Math.max(hit.secondsUntilReset(), 1)));
+                     writeError(response, 429, "TOO_MANY_REQUESTS", "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.");
+                     return;
+@@ -115,12 +115,12 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
+         } catch (DataAccessException e) {
+             // 4. Redis에 접속할 수 없다. 제한 없이 통과시킨다(fail-open): 제한 장치가 죽었다고 로그인 전체를 막지는 않는다.
+             //    대신 반드시 로그로 남겨 운영자가 알게 한다. 이 선택의 대가는 DECISIONS.md 참고.
+-            log.error("Redis 접속 실패 — 로그인 제한 없이 통과시킴", e);
++            logger.error("Redis 접속 실패 — 로그인 제한 없이 통과시킴", e);
+         }
+ 
+         // 5. 한도 안. 성공 시 카운터를 지울 수 있게 키를 붙여 두고 다음으로.
+         //    IP 카운터는 여기 넣지 않는다. 넣으면 계정 하나를 가진 공격자가 로그인 성공 한 번으로 IP 한도를 되돌릴 수 있다.
+-        metrics.loginAttempt("allowed");
++        securityMetrics.loginAttempt("allowed");
+         wrapped.setAttribute(KEYS_ATTRIBUTE, List.of(emailIpKey, emailKey));
+         filterChain.doFilter(wrapped, response);
+     }

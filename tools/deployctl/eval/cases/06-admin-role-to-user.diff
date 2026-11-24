@@ -1,0 +1,13 @@
+diff --git a/gateway/src/main/java/com/zerotrust/gateway/auth/AccessRules.java b/gateway/src/main/java/com/zerotrust/gateway/auth/AccessRules.java
+index 5faa3a3..ad040fb 100644
+--- a/gateway/src/main/java/com/zerotrust/gateway/auth/AccessRules.java
++++ b/gateway/src/main/java/com/zerotrust/gateway/auth/AccessRules.java
+@@ -12,7 +12,7 @@ public class AccessRules {
+     // 공개 경로는 정확히 일치할 때만 열었지만, 보호 규칙은 반대로 넓게(앞부분 일치) 건다.
+     // /admin/ 아래에 새 API가 생겨도 자동으로 보호된다.
+     private static final Map<String, String> REQUIRED_ROLE_BY_PREFIX = Map.of(
+-            "/admin/", "ADMIN"
++            "/admin/", "USER"
+     );
+ 
+     // 이 사용자가 이 경로에 들어가도 되는가.

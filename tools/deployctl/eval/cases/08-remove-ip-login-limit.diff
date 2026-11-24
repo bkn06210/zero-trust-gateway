@@ -1,0 +1,12 @@
+diff --git a/gateway/src/main/java/com/zerotrust/gateway/ratelimit/LoginRateLimitFilter.java b/gateway/src/main/java/com/zerotrust/gateway/ratelimit/LoginRateLimitFilter.java
+index 5e9eb79..6dd1e9c 100644
+--- a/gateway/src/main/java/com/zerotrust/gateway/ratelimit/LoginRateLimitFilter.java
++++ b/gateway/src/main/java/com/zerotrust/gateway/ratelimit/LoginRateLimitFilter.java
+@@ -94,7 +94,6 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
+         String emailIpKey = "rl:login:email-ip:" + email + ":" + ip;
+         String emailKey = "rl:login:email:" + email;
+         List<Rule> rules = List.of(
+-                new Rule("ip", "rl:login:ip:" + ip, perIp),
+                 new Rule("email+ip", emailIpKey, perEmailIp),
+                 new Rule("email", emailKey, perEmail));
+ 

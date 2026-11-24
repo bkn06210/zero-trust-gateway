@@ -24,6 +24,8 @@ func main() {
 		os.Exit(runRecord(os.Args[2:]))
 	case "trace":
 		os.Exit(runTrace(os.Args[2:]))
+	case "verify-settings":
+		os.Exit(runVerifySettings(os.Args[2:]))
 	default:
 		usage()
 	}
@@ -35,6 +37,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  deployctl verify-approval [-gitlab 주소] -project 그룹/프로젝트 커밋...")
 	fmt.Fprintln(os.Stderr, "  deployctl record -project 그룹/프로젝트 -commit 커밋 [-out 파일] 값파일...")
 	fmt.Fprintln(os.Stderr, "  deployctl trace -project 그룹/프로젝트 -commit 커밋 -service 이름 -image 저장소@다이제스트")
+	fmt.Fprintln(os.Stderr, "  deployctl verify-settings -project 그룹/프로젝트 [-expect 파일]")
 	os.Exit(2)
 }
 
@@ -166,5 +169,32 @@ func runTrace(args []string) int {
 	fmt.Printf("승인받은 커밋    %s\n", e.Change.ApprovedCommit)
 	fmt.Printf("코드 커밋        %s\n", e.Code.Commit)
 	fmt.Printf("검사 파이프라인  %s\n", e.Code.Pipeline)
+	return 0
+}
+
+func runVerifySettings(args []string) int {
+	fs := flag.NewFlagSet("verify-settings", flag.ExitOnError)
+	base := fs.String("gitlab", "https://gitlab.com/api/v4", "GitLab API 주소")
+	project := fs.String("project", "", "확인할 프로젝트")
+	expect := fs.String("expect", "settings/protection.yaml", "기대하는 설정을 적은 파일")
+	fs.Parse(args)
+	if *project == "" {
+		usage()
+	}
+	c := newClient(*base, os.Getenv("GITLAB_TOKEN"))
+
+	diffs, err := verifySettings(c, *project, *expect)
+	if err != nil {
+		fmt.Printf("설정 확인 실패\n  %v\n", err)
+		return 1
+	}
+	if len(diffs) > 0 {
+		fmt.Printf("설정이 %s와 다릅니다\n", *expect)
+		for _, d := range diffs {
+			fmt.Printf("  %s\n", d)
+		}
+		return 1
+	}
+	fmt.Printf("설정 일치 %s\n", *project)
 	return 0
 }

@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 // Gateway 테스트의 공통 토대.
 // - 뒤쪽 서비스 자리에는 "받은 요청을 기록만 하는 가짜 서버"를 둔다 → 무엇을 넘겼는지, 넘기긴 했는지 확인 가능
-// - 요청 제한에 쓰는 Redis는 Docker로 진짜를 띄운다
+// - 요청 제한에 쓰는 Redis는 진짜를 쓴다
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public abstract class GatewayTestSupport {
 
@@ -43,11 +43,20 @@ public abstract class GatewayTestSupport {
     protected static final AtomicReference<Headers> LAST_HEADERS = new AtomicReference<>();
     protected static final AtomicReference<String> LAST_BODY = new AtomicReference<>();
 
+    // Redis를 어디서 구하나.
+    // - TEST_REDIS_HOST가 주어지면 이미 떠 있는 것에 붙는다. CI가 이 길이다. 러너가 작업 옆에 띄워 준다.
+    // - 없으면 여기서 직접 띄운다. PC가 이 길이다.
+    // 길을 나눈 이유: 직접 띄우려면 Docker 데몬이 필요한데, CI에서 데몬을 쓰려면 특권 모드가 필요하다.
+    private static final String EXTERNAL_REDIS_HOST = System.getenv("TEST_REDIS_HOST");
+
     @SuppressWarnings("resource")
-    private static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
+    private static final GenericContainer<?> REDIS =
+            EXTERNAL_REDIS_HOST == null ? new GenericContainer<>("redis:7-alpine").withExposedPorts(6379) : null;
 
     static {
-        REDIS.start();
+        if (REDIS != null) {
+            REDIS.start();
+        }
         try {
             BACKEND = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         } catch (IOException e) {
@@ -79,8 +88,13 @@ public abstract class GatewayTestSupport {
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("jwt.secret", () -> SECRET);
         registry.add("services.auth.url", () -> "http://localhost:" + BACKEND.getAddress().getPort());
-        registry.add("spring.data.redis.host", REDIS::getHost);
-        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        if (REDIS != null) {
+            registry.add("spring.data.redis.host", REDIS::getHost);
+            registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        } else {
+            registry.add("spring.data.redis.host", () -> EXTERNAL_REDIS_HOST);
+            registry.add("spring.data.redis.port", () -> "6379");
+        }
         registry.add("management.server.port", () -> "0");   // 지표 포트도 임의 포트로
         // 통합 테스트는 전부 같은 PC(IP 하나)에서 보내서, 합치면 1분에 30번을 넘는다. IP 한도에 걸려 다른 테스트가 깨지지 않게 올려 둔다.
         // IP 한도 자체는 IP를 바꿔 가며 보낼 수 있는 LoginRateLimitFilterTest가 확인한다.

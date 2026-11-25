@@ -24,14 +24,24 @@ test:
   stage: verify
   extends: .code-changed
   image: eclipse-temurin:21-jdk
-  # Testcontainers는 Docker가 필요하다. GitHub 러너에는 Docker가 켜져 있었지만
-  # GitLab의 작업은 컨테이너 안에서 돌기 때문에, Docker를 옆에 따로 띄워서 붙인다.
+  # 통합 테스트는 진짜 PostgreSQL과 Redis가 필요하다. 러너가 작업 옆에 띄워 주고, 테스트는 거기에 붙기만 한다.
+  # 전에는 테스트 코드가 직접 컨테이너를 띄웠다. 그러려면 Docker 데몬이 있어야 해서 작업 옆에 데몬을 하나 더 띄웠고,
+  # 그 데몬은 특권 모드로만 뜬다. 테스트 때문에 그 권한을 요구하지 않으려고 바꿨다.
+  # PC에서는 지금도 테스트가 직접 띄운다. 아래 TEST_ 변수가 있으면 붙고, 없으면 띄운다.
   services:
-    - name: docker:27-dind
-      command: ["--tls=false"]
+    - name: postgres:16
+      alias: postgres
+    - name: redis:7-alpine
+      alias: redis
   variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+    # 서비스로 뜨는 PostgreSQL의 초기 설정. 이 작업 안에서만 쓰고 버리는 값이다.
+    POSTGRES_DB: authtest
+    POSTGRES_USER: test
+    POSTGRES_PASSWORD: test
+    TEST_DB_URL: jdbc:postgresql://postgres:5432/authtest
+    TEST_DB_USER: test
+    TEST_DB_PASSWORD: test
+    TEST_REDIS_HOST: redis
   parallel:
     matrix:
       - SERVICE: [auth-service, gateway]
@@ -103,26 +113,39 @@ aws-oidc-check:
 build-image:
   stage: build
   extends: .code-changed
-  image: docker:27
-  services:
-    - name: docker:27-dind
-      command: ["--tls=false"]
+  # Docker 데몬 없이 이미지를 만든다. BuildKit은 Dockerfile을 읽어 이미지를 만들고 끝나는 프로그램이라
+  # 옆에 데몬을 띄울 필요가 없고, 그래서 특권 모드로 뜨는 컨테이너가 이 작업에서 없어진다.
+  # 한계: GitLab이 제공하는 러너는 그 자체가 특권 모드로 돈다. 특권 모드를 꺼 둔 러너에서도 되는지는 확인하지 못했다.
+  image:
+    name: moby/buildkit:v0.35.1-rootless
+    # 이 이미지는 켜지면 빌드 서버로 뜨게 되어 있다. 스크립트를 실행하려면 그 동작을 꺼야 한다.
+    entrypoint: [""]
   variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+    BUILDKITD_FLAGS: --oci-worker-no-process-sandbox
   parallel:
     matrix:
       - SERVICE: [auth-service, gateway]
-  script:
+  before_script:
     # 로그인 정보는 GitLab이 이 작업에만 쓰라고 만들어 준 것이다. 작업이 끝나면 못 쓴다.
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - mkdir -p ~/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > ~/.docker/config.json
+  script:
     - IMAGE="$CI_REGISTRY_IMAGE/$SERVICE"
-    - docker build -t "$IMAGE:$CI_COMMIT_SHA" "$SERVICE"
-    - docker push "$IMAGE:$CI_COMMIT_SHA"
-    # 다이제스트는 저장소에 올릴 때 정해진다. 파일에 적어 다음 작업에 넘긴다.
-    - mkdir -p digests
-    - docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$CI_COMMIT_SHA" > "digests/$SERVICE.txt"
-    - cat "digests/$SERVICE.txt"
+    # 만들면서 바로 저장소에 올린다. 올린 이미지의 다이제스트는 metadata.json에 적힌다.
+    - |
+      buildctl-daemonless.sh build \
+        --frontend dockerfile.v0 \
+        --local context="$SERVICE" \
+        --local dockerfile="$SERVICE" \
+        --output type=image,name="$IMAGE:$CI_COMMIT_SHA",push=true \
+        --metadata-file metadata.json
+    # 다이제스트를 파일에 적어 다음 작업에 넘긴다. 못 읽었으면 여기서 실패시킨다.
+    - |
+      DIGEST=$(sed -n 's/.*"containerimage.digest": *"\([^"]*\)".*/\1/p' metadata.json)
+      test -n "$DIGEST"
+      mkdir -p digests
+      echo "$IMAGE@$DIGEST" > "digests/$SERVICE.txt"
+      cat "digests/$SERVICE.txt"
   artifacts:
     paths:
       - digests/

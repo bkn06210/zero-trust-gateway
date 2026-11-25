@@ -13,24 +13,40 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
 
-// 통합 테스트의 공통 토대: 진짜 PostgreSQL을 Docker로 띄우고, 앱 전체를 임의의 포트에 실제로 기동한다.
+// 통합 테스트의 공통 토대: 진짜 PostgreSQL에 붙이고, 앱 전체를 임의의 포트에 실제로 기동한다.
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public abstract class IntegrationTestSupport {
 
+    // PostgreSQL을 어디서 구하나.
+    // - TEST_DB_URL이 주어지면 이미 떠 있는 것에 붙는다. CI가 이 길이다. 러너가 작업 옆에 띄워 준다.
+    // - 없으면 여기서 직접 띄운다. PC가 이 길이다. Docker만 켜져 있으면 준비 없이 돌릴 수 있다.
+    // 길을 나눈 이유: 직접 띄우려면 Docker 데몬이 필요한데, CI 작업은 컨테이너 안에서 돌아서
+    // 데몬을 쓰려면 특권 모드로 하나를 더 띄워야 한다. 테스트 때문에 그 권한을 요구하지 않으려고 CI에서는 붙기만 한다.
+    private static final String EXTERNAL_DB_URL = System.getenv("TEST_DB_URL");
+
     // 모든 테스트 클래스가 컨테이너 하나를 같이 쓴다. 클래스마다 새로 띄우면 그만큼 느려진다.
     // 테스트가 끝나 프로그램이 종료되면 Testcontainers가 컨테이너를 알아서 지운다.
-    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16");
+    private static final PostgreSQLContainer POSTGRES =
+            EXTERNAL_DB_URL == null ? new PostgreSQLContainer("postgres:16") : null;
 
     static {
-        POSTGRES.start();
+        if (POSTGRES != null) {
+            POSTGRES.start();
+        }
     }
 
-    // 앱이 뜨기 전에 설정값을 바꿔치기한다. 개발용 DB(.env) 대신 방금 띄운 컨테이너에 접속하게 된다.
+    // 앱이 뜨기 전에 설정값을 바꿔치기한다. 개발용 DB(.env) 대신 테스트용 DB에 접속하게 된다.
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        if (POSTGRES != null) {
+            registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+            registry.add("spring.datasource.username", POSTGRES::getUsername);
+            registry.add("spring.datasource.password", POSTGRES::getPassword);
+        } else {
+            registry.add("spring.datasource.url", () -> EXTERNAL_DB_URL);
+            registry.add("spring.datasource.username", () -> System.getenv("TEST_DB_USER"));
+            registry.add("spring.datasource.password", () -> System.getenv("TEST_DB_PASSWORD"));
+        }
         // .env가 없는 환경(CI 등)에서도 돌도록 테스트 전용 키를 넣는다. 실제 키가 아니다.
         registry.add("jwt.secret", () -> "test-only-secret-key-for-integration-tests-0123456789");
         // 유예 시간이 지난 경우를 테스트하려면 기다려야 하므로, 테스트에서는 1초로 줄인다.

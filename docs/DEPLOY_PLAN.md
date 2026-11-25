@@ -137,9 +137,9 @@
 
 | 저장소 | 내용 |
 |---|---|
-| zero-trust-gateway | 게이트웨이와 인증 서비스 코드, CI 설정, 검사 도구 `tools/deployctl` |
+| zero-trust-gateway | 게이트웨이와 인증 서비스 코드, 이미지를 만들고 검사하는 CI 설정 |
 | zero-trust-deploy | 쿠버네티스에 무엇을 올릴지 적은 파일 |
-| zero-trust-pipeline | 배포 설정 저장소의 검사 절차와 기대 보호 설정 |
+| zero-trust-pipeline | 배포 설정 저장소의 검사 절차, 기대 보호 설정, 검사 도구 `deployctl` |
 
 ## 결정 지점
 

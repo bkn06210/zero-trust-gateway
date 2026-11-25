@@ -19,5 +19,3 @@ infra/.terraform.lock.hcl
 # 비공개 메모 (레포에 올리지 않음)
 .private/
 
-# Go CLI 빌드 결과
-tools/deployctl/bin/

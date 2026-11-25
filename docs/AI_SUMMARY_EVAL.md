@@ -19,7 +19,7 @@
 
 채점은 프로그램이 글자로 비교한다. 사람이나 모델이 답을 읽고 판단하는 단계가 없다.
 
-문제는 `tools/deployctl/eval/cases/`에, 정답표는 그 안의 `cases.yaml`에, 전체 응답은 `tools/deployctl/eval/results.json`에 있다. 실행은 `deployctl eval-summary -runs 3`이다.
+문제, 정답표, 전체 응답은 검사 도구와 함께 [zero-trust-pipeline](https://gitlab.com/bkn06210-lab/zero-trust-pipeline)의 `deployctl/eval/`에 있다. 문제는 `cases/`에, 정답표는 그 안의 `cases.yaml`에, 전체 응답은 `results.json`에 있다. 실행은 `deployctl eval-summary -runs 3`이다.
 
 ### 무엇을 문제로 냈나
 
